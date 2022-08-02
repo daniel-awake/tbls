@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/aquasecurity/go-version/pkg/version"
@@ -320,6 +321,9 @@ ORDER BY oid`)
 	}
 	s.Functions = functions
 
+	sort.Slice(tables, func(i, j int) bool {
+		return tables[i].Name < tables[j].Name
+	})
 	s.Tables = tables
 
 	// Relations
