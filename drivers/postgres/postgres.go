@@ -10,7 +10,7 @@ import (
 	"github.com/k1LoW/tbls/ddl"
 	"github.com/k1LoW/tbls/dict"
 	"github.com/k1LoW/tbls/schema"
-	"github.com/lib/pq"
+	//	"github.com/lib/pq"
 	"github.com/pkg/errors"
 )
 
@@ -113,7 +113,19 @@ ORDER BY oid`)
 
 		name := fmt.Sprintf("%s.%s", tableSchema, tableName)
 
+		// try to skip postgres tables and temp tables
+		if strings.HasPrefix(tableName, "pg_") ||
+			strings.HasPrefix(tableName, "gp_") ||
+			strings.Contains(tableName, "_1_prt_") ||
+			strings.HasPrefix(tableName, "temp_") ||
+			strings.HasPrefix(tableName, "tmp_") ||
+			tableSchema == "tmp" {
+			continue
+		}
+
 		fullTableNames = append(fullTableNames, name)
+
+		fmt.Println(name)
 
 		table := &schema.Table{
 			Name:    name,
@@ -139,86 +151,89 @@ ORDER BY oid`)
 		}
 
 		// constraints
-		constraintRows, err := p.db.Query(p.queryForConstraints(), tableOid)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		defer constraintRows.Close()
+		// constraintRows, err := p.db.Query(p.queryForConstraints(), tableOid)
+		// if err != nil {
+		// 	return errors.WithStack(err)
+		// }
+		// defer constraintRows.Close()
 
 		constraints := []*schema.Constraint{}
 
-		for constraintRows.Next() {
-			var (
-				constraintName                  string
-				constraintDef                   string
-				constraintType                  string
-				constraintReferencedTable       sql.NullString
-				constraintColumnNames           []sql.NullString
-				constraintReferencedColumnNames []sql.NullString
-				constraintComment               sql.NullString
-			)
-			err = constraintRows.Scan(&constraintName, &constraintDef, &constraintType, &constraintReferencedTable, pq.Array(&constraintColumnNames), pq.Array(&constraintReferencedColumnNames), &constraintComment)
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			rt := constraintReferencedTable.String
-			constraint := &schema.Constraint{
-				Name:              constraintName,
-				Type:              convertConstraintType(constraintType),
-				Def:               constraintDef,
-				Table:             &table.Name,
-				Columns:           arrayRemoveNull(constraintColumnNames),
-				ReferencedTable:   &rt,
-				ReferencedColumns: arrayRemoveNull(constraintReferencedColumnNames),
-				Comment:           constraintComment.String,
-			}
+		// for constraintRows.Next() {
+		// 	var (
+		// 		constraintName                  string
+		// 		constraintDef                   string
+		// 		constraintType                  string
+		// 		constraintReferencedTable       sql.NullString
+		// 		constraintColumnNames           []sql.NullString
+		// 		constraintReferencedColumnNames []sql.NullString
+		// 		constraintComment               sql.NullString
+		// 	)
+		// 	err = constraintRows.Scan(&constraintName, &constraintDef, &constraintType, &constraintReferencedTable, pq.Array(&constraintColumnNames), pq.Array(&constraintReferencedColumnNames), &constraintComment)
+		// 	if err != nil {
+		// 		return errors.WithStack(err)
+		// 	}
+		// 	rt := constraintReferencedTable.String
+		// 	constraint := &schema.Constraint{
+		// 		Name:              constraintName,
+		// 		Type:              convertConstraintType(constraintType),
+		// 		Def:               constraintDef,
+		// 		Table:             &table.Name,
+		// 		Columns:           arrayRemoveNull(constraintColumnNames),
+		// 		ReferencedTable:   &rt,
+		// 		ReferencedColumns: arrayRemoveNull(constraintReferencedColumnNames),
+		// 		Comment:           constraintComment.String,
+		// 	}
 
-			if constraintType == "f" {
-				relation := &schema.Relation{
-					Table: table,
-					Def:   constraintDef,
-				}
-				relations = append(relations, relation)
-			}
-			constraints = append(constraints, constraint)
-		}
+		// 	if constraintType == "f" {
+		// 		relation := &schema.Relation{
+		// 			Table: table,
+		// 			Def:   constraintDef,
+		// 		}
+		// 		relations = append(relations, relation)
+		// 	}
+		// 	constraints = append(constraints, constraint)
+		// }
 		table.Constraints = constraints
 
 		// triggers
-		if !p.rsMode {
-			triggerRows, err := p.db.Query(`
-SELECT tgname, pg_get_triggerdef(trig.oid), descr.description AS comment
-FROM pg_trigger AS trig
-LEFT JOIN pg_description AS descr ON trig.oid = descr.objoid
-WHERE tgisinternal = false
-AND tgrelid = $1::oid
-ORDER BY tgrelid
-`, tableOid)
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			defer triggerRows.Close()
+		// 		if !p.rsMode {
+		// 			triggerRows, err := p.db.Query(`
+		// SELECT tgname, pg_get_triggerdef(trig.oid), descr.description AS comment
+		// FROM pg_trigger AS trig
+		// LEFT JOIN pg_description AS descr ON trig.oid = descr.objoid
+		// WHERE tgisinternal = false
+		// AND tgrelid = $1::oid
+		// ORDER BY tgrelid
+		// `, tableOid)
+		// 			if err != nil {
+		// 				return errors.WithStack(err)
+		// 			}
+		// 			defer triggerRows.Close()
 
-			triggers := []*schema.Trigger{}
-			for triggerRows.Next() {
-				var (
-					triggerName    string
-					triggerDef     string
-					triggerComment sql.NullString
-				)
-				err = triggerRows.Scan(&triggerName, &triggerDef, &triggerComment)
-				if err != nil {
-					return errors.WithStack(err)
-				}
-				trigger := &schema.Trigger{
-					Name:    triggerName,
-					Def:     triggerDef,
-					Comment: triggerComment.String,
-				}
-				triggers = append(triggers, trigger)
-			}
-			table.Triggers = triggers
-		}
+		// 			triggers := []*schema.Trigger{}
+		// 			for triggerRows.Next() {
+		// 				var (
+		// 					triggerName    string
+		// 					triggerDef     string
+		// 					triggerComment sql.NullString
+		// 				)
+		// 				err = triggerRows.Scan(&triggerName, &triggerDef, &triggerComment)
+		// 				if err != nil {
+		// 					return errors.WithStack(err)
+		// 				}
+		// 				trigger := &schema.Trigger{
+		// 					Name:    triggerName,
+		// 					Def:     triggerDef,
+		// 					Comment: triggerComment.String,
+		// 				}
+		// 				triggers = append(triggers, trigger)
+		// 			}
+		// 			table.Triggers = triggers
+		// 		}
+
+		triggers := []*schema.Trigger{}
+		table.Triggers = triggers
 
 		// columns
 		columnStmt, err := p.queryForColumns(s.Driver.DatabaseVersion)
@@ -264,34 +279,36 @@ ORDER BY tgrelid
 		table.Columns = columns
 
 		// indexes
-		indexRows, err := p.db.Query(p.queryForIndexes(), tableOid)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		defer indexRows.Close()
-
 		indexes := []*schema.Index{}
-		for indexRows.Next() {
-			var (
-				indexName        string
-				indexDef         string
-				indexColumnNames []sql.NullString
-				indexComment     sql.NullString
-			)
-			err = indexRows.Scan(&indexName, &indexDef, pq.Array(&indexColumnNames), &indexComment)
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			index := &schema.Index{
-				Name:    indexName,
-				Def:     indexDef,
-				Table:   &table.Name,
-				Columns: arrayRemoveNull(indexColumnNames),
-				Comment: indexComment.String,
-			}
+		// fmt.Println("query is %s, %d", p.queryForIndexes(), tableOid)
+		// indexRows, err := p.db.Query(p.queryForIndexes(), tableOid)
+		// if err != nil {
+		// 	return errors.WithStack(err)
+		// }
+		// defer indexRows.Close()
 
-			indexes = append(indexes, index)
-		}
+		// indexes := []*schema.Index{}
+		// for indexRows.Next() {
+		// 	var (
+		// 		indexName        string
+		// 		indexDef         string
+		// 		indexColumnNames []sql.NullString
+		// 		indexComment     sql.NullString
+		// 	)
+		// 	err = indexRows.Scan(&indexName, &indexDef, pq.Array(&indexColumnNames), &indexComment)
+		// 	if err != nil {
+		// 		return errors.WithStack(err)
+		// 	}
+		// 	index := &schema.Index{
+		// 		Name:    indexName,
+		// 		Def:     indexDef,
+		// 		Table:   &table.Name,
+		// 		Columns: arrayRemoveNull(indexColumnNames),
+		// 		Comment: indexComment.String,
+		// 	}
+
+		// 	indexes = append(indexes, index)
+		// }
 		table.Indexes = indexes
 
 		tables = append(tables, table)
