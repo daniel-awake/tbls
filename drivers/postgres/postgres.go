@@ -120,7 +120,8 @@ ORDER BY oid`)
 			strings.Contains(tableName, "_1_prt_") ||
 			strings.HasPrefix(tableName, "temp_") ||
 			strings.HasPrefix(tableName, "tmp_") ||
-			tableSchema == "tmp" {
+			tableSchema == "tmp" ||
+			strings.HasPrefix(tableSchema, "pg_temp") {
 			continue
 		}
 
